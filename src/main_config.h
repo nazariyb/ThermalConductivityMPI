@@ -6,6 +6,7 @@
 #include "boost/mpi.hpp"
 
 namespace mpi = boost::mpi;
+using range = boost::multi_array_types::index_range;
 using VecPairInt = std::vector<std::pair<int, int>>;
 using ArrayD2 = boost::multi_array<double, 2>;
 using ImagesQueue = thread_safe_queue<ArrayD2>;

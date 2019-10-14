@@ -1,10 +1,33 @@
-#include <map>
 #include <string>
 
 #include "utils.h"
 #include "main_config.h"
-
 #include "thread_safe_queue.h"
+
+#include <boost/mpi.hpp>
+#include <boost/mpi/communicator.hpp>
+#include <boost/serialization/string.hpp>
+
+void swap_edges (int rank, int workers_num, const mpi::communicator &world, ArrayD2 &array)
+{
+    if (rank != 0) {
+        mpi::request reqs[2];
+        reqs[0] = world.isend(rank - 1, 1, std::string("hello1"));
+        std::string msg;
+        reqs[1] = world.irecv(rank - 1, 1, msg);
+        mpi::wait_all(reqs, reqs + 2);
+        //    TODO: send data to rank-1
+
+    }
+    if (rank != workers_num) {
+        mpi::request reqs[2];
+        reqs[0] = world.isend(rank + 1, 1, std::string("hello2"));
+        std::string msg;
+        reqs[1] = world.irecv(rank + 1, 1, msg);
+        mpi::wait_all(reqs, reqs + 2);
+        //    TODO: send data to rank+1
+    }
+}
 
 
 VecPairInt get_bounds(int workers_num, int grid_size)
@@ -55,7 +78,7 @@ int generate_heat_map(const VecPairInt & heat_map_conf, ArrayD2 & heat_map_init_
     return 0;
 }
 
-void calculation_process(ArrayD2 init_grid, ImagesQueue & images_queue, const Params & params)
+void calculation_process (const ArrayD2 &init_grid, ImagesQueue &images_queue, const Params &params)
 {
     auto current = init_grid;
     auto next = init_grid;
