@@ -1,17 +1,14 @@
 #include <iostream>
-#include <fstream>
-#include <map>
 #include <string>
 
-#include <png++/png.hpp>
 #include <boost/mpi.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/mpi/communicator.hpp>
 #include <boost/multi_array.hpp>
 
 #include "utils.h"
 #include "conf_reader.h"
 #include "main_config.h"
-#include "thread_safe_queue.h"
 
 
 Params conf_map_to_Params(MapStrStr & conf_map)
@@ -38,9 +35,8 @@ int main (int argc, char * argv[])
     mpi::environment env{argc, argv};
     mpi::communicator world;
     std::cout << world.rank() << ", " << world.size() << '\n';
-    const int workers_num = world.size();
+    const int workers_num = world.size() - 1;
 
-    VecPairInt bounds;
     // set name of configuration file
     std::string config_file("../config.dat");
     if (argc >= 2) { config_file = argv[1]; }
@@ -69,13 +65,10 @@ int main (int argc, char * argv[])
     auto params = conf_map_to_Params(conf);
     params.alpha = params.conductivity / (params.density * params.capacity);
     params.alpha_deltaT = params.alpha_deltaT * params.alpha;
-
-    auto larger_axis = std::max(params.gridX, params.gridY);
+    auto bounds = get_bounds(1, params.gridX);
 
     if (world.rank() == 0)
     {
-
-
         std::ifstream hmcf("../heat_map");
         if (!hmcf.is_open()) {
             std::cerr << "Error while opening configuration file.\n"
@@ -102,14 +95,11 @@ int main (int argc, char * argv[])
             return WRONG_MAP_SIZE_ERROR;
         }
 
-        bounds = get_bounds(1, larger_axis);
-
-        int current_worker{0};
-        for (auto &p: bounds) {
-            auto new_array = (larger_axis == params.gridX)
-                             ? heat_map_init_state[boost::indices[range().start(p.first).finish(p.second + 1)][range()]]
-                             : heat_map_init_state[boost::indices[range()][range().start(p.first).finish(
-                            p.second + 1)]];
+        for ( int w = 0; w < workers_num; ++w )
+        {
+            auto new_array = heat_map_init_state
+            [boost::indices[range().start(bounds[w].first).finish(bounds[w].second + 1)]
+                    [range()]];
 
             for (ArrayD2::index i = 0; i < new_array.shape()[1]; ++i) {
                 for (ArrayD2::index j = 0; j < new_array.shape()[0]; ++j)
@@ -117,68 +107,31 @@ int main (int argc, char * argv[])
                 std::cout << std::endl;
             }
             std::cout << "----" << std::endl;
-            if (current_worker != 0) { }
-                //                world.isend(current_worker, 1, new_array);
-            else {
-                //            TODO: parent takes the last part of data and make calculations
-
-
-
-            }
-
-            ++current_worker;
+            world.isend(w, 1, &new_array[0][0],
+                        static_cast<int>(new_array.shape()[0] * new_array.shape()[1]));
 
         }
 
-        
+        std::string img_path {"../img_cache"};
+        boost::filesystem::create_directory(img_path);
+        ArrayD2 result_map(boost::extents[params.gridX][params.gridY]);
+
+        for ( int i = 0; i < params.time / params.printT; ++i )
+        {
+            gather_map(world, workers_num, bounds, result_map);
+            save_map(result_map, img_path + "/save_" + std::to_string(i) + ".png");
+        }
+
     }
     else
     {
-        auto step = bounds[world.rank()].second - bounds[world.rank()].first;
-        auto XisLarger = larger_axis == params.gridX;
-        ArrayD2 array(boost::extents
-                      [(XisLarger) ? step : params.gridX]
-                      [(XisLarger) ? params.gridY : step]);
+        auto current_bound = bounds[world.rank()];
+        auto sizeX = current_bound.second - current_bound.first;
+        ArrayD2 partial_map(boost::extents[sizeX][params.gridY]);
 
-        world.irecv(0, 1, array);
-        //        TODO: run alculations
+        world.recv(0, 1, &partial_map[0][0], sizeX * params.gridY);
+        calculation_process(world, partial_map, params);
     }
 
-
-//    if (!von_Neumann_criterion(params)){
-//        std::cerr << "System is not stable according to von Neumann criterion. So fuck it." << std::endl;
-//        return VON_NEUMANN_ERROR;
-//    }
-    ImagesQueue images_queue;
-//    boost::multi_array<double, 3> history_grid(boost::extents[static_cast<int>(conf["gridX"])][static_cast<int>(conf["gridY"])][static_cast<int>(conf["printT"])]);
-    //TODO: add first map to array
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     return 0;
-
-
-
-
-
-
-
 }
