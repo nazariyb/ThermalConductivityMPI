@@ -24,8 +24,8 @@ void gather_map ( const mpi::communicator & world, int workers_num, const VecPai
     auto reqs = new mpi::request[workers_num];
     for ( int w = 1; w <= workers_num; ++w )
     {
-        reqs[w - 1] = world.irecv(w, 1, &array[bounds[w].first + 1][0],
-                                  static_cast<int>(( bounds[w].second - bounds[w].first ) * array.shape()[1]));
+        reqs[w - 1] = world.irecv(w, 1, &array[bounds[w - 1].first][0],
+                                  static_cast<int>(( bounds[w -1 ].second - bounds[w - 1].first + 1 ) * array.shape()[1]));
     }
     mpi::wait_all(reqs, reqs + workers_num);
     delete[] reqs;

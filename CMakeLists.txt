@@ -11,5 +11,5 @@ find_package(PNG REQUIRED)
 #set(Boost_USE_STATIC_LIBS OFF)
 include_directories(${Boost_INCLUDE_DIRS} ${PNG_INCLUDE_DIR})
 
-add_executable(ThermalConductivityMPI src/main.cpp src/main_config.h src/utils.cpp src/utils.h src/conf_reader.cpp src/conf_reader.h src/thread_safe_queue.h)
+add_executable(ThermalConductivityMPI src/main.cpp src/main_config.h src/utils.cpp src/utils.h src/conf_reader.cpp src/conf_reader.h)
 target_link_libraries(ThermalConductivityMPI ${Boost_LIBRARIES} ${PNG_LIBRARY})

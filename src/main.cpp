@@ -65,7 +65,7 @@ int main (int argc, char * argv[])
     auto params = conf_map_to_Params(conf);
     params.alpha = params.conductivity / (params.density * params.capacity);
     params.alpha_deltaT = params.alpha_deltaT * params.alpha;
-    auto bounds = get_bounds(1, params.gridX);
+    auto bounds = get_bounds(workers_num, params.gridX);
 
     if (world.rank() == 0)
     {
@@ -95,21 +95,22 @@ int main (int argc, char * argv[])
             return WRONG_MAP_SIZE_ERROR;
         }
 
-        for ( int w = 0; w < workers_num; ++w )
+        for ( int w = 1; w < workers_num; ++w )
         {
+            std::cout << "started sending data to worker #" << w << " of " << workers_num << std::endl;
             auto new_array = heat_map_init_state
-            [boost::indices[range().start(bounds[w].first).finish(bounds[w].second + 1)]
+            [boost::indices[range().start(bounds[w - 1].first).finish(bounds[w - 1].second + 1)]
                     [range()]];
 
-            for (ArrayD2::index i = 0; i < new_array.shape()[1]; ++i) {
-                for (ArrayD2::index j = 0; j < new_array.shape()[0]; ++j)
-                    std::cout << new_array[j][i] << " ";
-                std::cout << std::endl;
-            }
-            std::cout << "----" << std::endl;
-            world.isend(w, 1, &new_array[0][0],
+//            for (ArrayD2::index i = 0; i < new_array.shape()[1]; ++i) {
+//                for (ArrayD2::index j = 0; j < new_array.shape()[0]; ++j)
+//                    std::cout << new_array[j][i] << " ";
+//                std::cout << std::endl;
+//            }
+//            std::cout << "----" << std::endl;
+            world.send(w, 1, &new_array[0][0],
                         static_cast<int>(new_array.shape()[0] * new_array.shape()[1]));
-
+            std::cout << "data in range [" << bounds[w - 1].first << "-" << bounds[w - 1].second << "] is sent to worker #" << w << std::endl;
         }
 
         std::string img_path {"../img_cache"};
@@ -125,11 +126,20 @@ int main (int argc, char * argv[])
     }
     else
     {
-        auto current_bound = bounds[world.rank()];
-        auto sizeX = current_bound.second - current_bound.first;
+
+        auto current_bound = bounds[world.rank() - 1];
+        auto sizeX = current_bound.second - current_bound.first + 1;
         ArrayD2 partial_map(boost::extents[sizeX][params.gridY]);
 
         world.recv(0, 1, &partial_map[0][0], sizeX * params.gridY);
+        std::cout << world.rank() << " got:" << std::endl;
+        for (ArrayD2::index i = 0; i < partial_map.shape()[1]; ++i) {
+            for (ArrayD2::index j = 0; j < partial_map.shape()[0]; ++j)
+                std::cout << partial_map[j][i] << " ";
+            std::cout << std::endl;
+        }
+        std::cout << "----" << std::endl;
+
         calculation_process(world, partial_map, params);
     }
 
