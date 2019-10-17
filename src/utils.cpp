@@ -23,25 +23,25 @@ void save_map ( const ArrayD2 & heat_map, const std::string & img_path )
 
 void gather_map ( const mpi::communicator & world, int workers_num, const VecPairInt & bounds, ArrayD2 & array )
 {
-    std::cout << "start gathering" << std::endl;
+//    std::cout << "start gathering" << std::endl;
     auto reqs = new mpi::request[workers_num];
     for ( int w = 1; w <= workers_num; ++w )
     {
-        std::cout << "#" << world.rank() << " trying to get res from #" << w << " with size: "
-                  << ( bounds[w - 1].second - bounds[w - 1].first + 1 ) * array.shape()[1] << std::endl;
+//        std::cout << "#" << world.rank() << " trying to get res from #" << w << " with size: "
+//                  << ( bounds[w - 1].second - bounds[w - 1].first + 1 ) * array.shape()[1] << std::endl;
         reqs[w - 1] = world.irecv(w, 1, &array[bounds[w - 1].first][0],
                                   static_cast<int>(( bounds[w -1 ].second - bounds[w - 1].first + 1 ) * array.shape()[1]));
     }
-    current_print << " waiting..." << std::endl;
+//    current_print << " waiting..." << std::endl;
     mpi::wait_all(reqs, reqs + workers_num);
-    std::cout << "#" << world.rank() << " gathered array, so we have:" << std::endl;
-    for ( ArrayD2::index i = 0; i < array.shape()[1]; ++i )
-    {
-        for ( ArrayD2::index j = 0; j < array.shape()[0]; ++j )
-            std::cout << array[j][i] << " ";
-        std::cout << std::endl;
-    }
-    std::cout << "----" << std::endl;
+//    std::cout << "#" << world.rank() << " gathered array, so we have:" << std::endl;
+//    for ( ArrayD2::index i = 0; i < array.shape()[1]; ++i )
+//    {
+//        for ( ArrayD2::index j = 0; j < array.shape()[0]; ++j )
+//            std::cout << array[j][i] << " ";
+//        std::cout << std::endl;
+//    }
+//    std::cout << "========" << std::endl;
     delete[] reqs;
 }
 
@@ -49,17 +49,26 @@ void gather_map ( const mpi::communicator & world, int workers_num, const VecPai
 void swap_edge ( int rank, size_t old_row_ind, size_t new_row_ind, const mpi::communicator & world, ArrayD2 & array )
 {
     mpi::request reqs[2];
-
+//    current_print << " swapping with #" << rank << std::endl;
     ArrayD1 new_row(boost::extents[array.shape()[1]]);
     reqs[0] = world.irecv(rank, 1, &new_row[0], array.shape()[1]);
 
+//    current_print << " sending " << old_row_ind << " :" << std::endl;
     ArrayD1 old_row = array[boost::indices[old_row_ind][range()]];
+//    for (auto & e : old_row)
+//        std::cout << e << " ";
+//    std::cout << std::endl;
     reqs[1] = world.isend(rank, 1, &old_row[0], old_row.shape()[0]);
 
     mpi::wait_all(reqs, reqs + 1);
     array[new_row_ind] = new_row;
 
     mpi::wait_all(reqs + 1, reqs + 2);
+//    current_print << " recived " << old_row.shape()[0] << " :" << std::endl;
+//    for (auto & e : new_row)
+//        std::cout << e << " ";
+//    std::cout << std::endl;
+
 }
 
 
@@ -71,7 +80,7 @@ void swap_edges ( const mpi::communicator & world, ArrayD2 & array )
     if ( rank > 1 )
         swap_edge(rank - 1, 1, 0, world, array);
     if ( rank < workers_num )
-        swap_edge(rank + 1, array.shape()[1] - 2, array.shape()[1] - 1, world, array);
+        swap_edge(rank + 1, array.shape()[0] - 2, array.shape()[0] - 1, world, array);
 }
 
 
@@ -126,6 +135,10 @@ void next_state(const ArrayD2 & current, ArrayD2 & next, const Params & params)
     {
         for ( int j = 1; j < current.shape()[1] - 1; ++j )
         {
+//            std::cout << "alpha delta " << params.alpha_deltaT << std::endl;
+//            std::cout << "next state is: " << current[i][j] + params.alpha_deltaT * (
+//                    ( current[i - 1][j] - 2 * current[i][j] + current[i + 1][j] ) / ( params.deltaX * params.deltaX ) +
+//                    ( current[i][j - 1] - 2 * current[i][j] + current[i][j + 1] ) / ( params.deltaY * params.deltaY ) )<< std::endl;
             next[i][j] = current[i][j] + params.alpha_deltaT * (
                     ( current[i - 1][j] - 2 * current[i][j] + current[i + 1][j] ) / ( params.deltaX * params.deltaX ) +
                     ( current[i][j - 1] - 2 * current[i][j] + current[i][j + 1] ) / ( params.deltaY * params.deltaY )
@@ -150,27 +163,43 @@ void calculation_process ( const mpi::communicator & world, const ArrayD2 & init
 
     ArrayD2 current = init_grid[boost::indices[range()][range()]];
     ArrayD2 next = init_grid[boost::indices[range()][range()]];
-    std::cout << "#" << world.rank() << " started calculating" << std::endl;
+//    std::cout << "#" << world.rank() << " started calculating" << std::endl;
     for ( int i = 0; i * params.deltaT < params.time; ++i )
     {
         std::cout << "#" << world.rank() << " iteration: " << i << "/" << i * params.deltaT << std::endl;
 
         if (( static_cast<int>(params.deltaT * i) % params.printT ) == 0 )
         {
-            std::cout << "#" << world.rank() << " send results:" << std::endl;
-            for ( ArrayD2::index i = 0; i < current.shape()[1]; ++i )
-            {
-                for ( ArrayD2::index j = 0; j < current.shape()[0]; ++j )
-                    std::cout << current[j][i] << " ";
-                std::cout << std::endl;
-            }
-            std::cout << "size: " << current.shape()[0] * current.shape()[1] << std::endl;
-            std::cout << "----" << std::endl;
+//            std::cout << "#" << world.rank() << " send results:" << std::endl;
+//            for ( ArrayD2::index i = 0; i < current.shape()[1]; ++i )
+//            {
+//                for ( ArrayD2::index j = 0; j < current.shape()[0]; ++j )
+//                    std::cout << current[j][i] << " ";
+//                std::cout << std::endl;
+//            }
+//            std::cout << "size: " << current.shape()[0] * current.shape()[1] << std::endl;
+//            std::cout << "----" << std::endl;
             world.send(0, 1, &current[0][0], static_cast<int>(current.shape()[0] * current.shape()[1]));
         }
-
+//        std::cout << "current: " << std::endl;
+//        for ( ArrayD2::index i = 0; i < current.shape()[1]; ++i )
+//        {
+//            for ( ArrayD2::index j = 0; j < current.shape()[0]; ++j )
+//                std::cout << current[j][i] << " ";
+//            std::cout << std::endl;
+//        }
+//        std::cout << "=======" << std::endl << std::endl;
         next_state(current, next, params);
+//        std::cout << "next: " << std::endl;
+//        for ( ArrayD2::index i = 0; i < next.shape()[1]; ++i )
+//        {
+//            for ( ArrayD2::index j = 0; j < next.shape()[0]; ++j )
+//                std::cout << next[j][i] << " ";
+//            std::cout << std::endl;
+//        }
+//        std::cout << "----" << std::endl << std::endl;
         std::swap(current, next);
+
 
         swap_edges(world, current);
     }
