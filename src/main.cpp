@@ -126,7 +126,7 @@ int main (int argc, char * argv[])
     }
     else
     {
-
+        std::cout << "#" << world.rank() << " started" << std::endl;
         auto current_bound = bounds[world.rank() - 1];
         auto sizeX = current_bound.second - current_bound.first + 1;
         ArrayD2 partial_map(boost::extents[sizeX][params.gridY]);
