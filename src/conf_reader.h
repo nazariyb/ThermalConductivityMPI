@@ -8,7 +8,8 @@
 
 using MapStrStr = std::map<std::string, std::string>;
 
-MapStrStr read_conf (std::istream &cf, char splitter);
-std::vector<std::pair<int, int>> read_heat_map_conf (std::istream &cf, char splitter);
+MapStrStr read_conf ( std::istream & cf, char delimiter );
+
+std::vector<std::pair<int, int>> read_heat_map_conf ( std::istream & cf, char delimiter );
 
 #endif //THERMALCONDUCTIVITYMPI_CONF_READER_H

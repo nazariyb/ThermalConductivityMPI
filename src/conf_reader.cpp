@@ -27,7 +27,8 @@ std::vector<std::string> split_line (const std::string &line, const char delimit
     return target_vector;
 }
 
-MapStrStr read_conf (std::istream &cf, char splitter)
+
+MapStrStr read_conf ( std::istream & cf, char delimiter )
 {
     std::ios::fmtflags flags(cf.flags());
     cf.exceptions(std::ifstream::badbit);
@@ -38,7 +39,7 @@ MapStrStr read_conf (std::istream &cf, char splitter)
         std::string key;
 
         while (getline(cf, line)) {
-            auto target_vector = split_line(line, splitter);
+            auto target_vector = split_line(line, delimiter);
             res[target_vector[0]] = target_vector[1];
         }
 
@@ -50,7 +51,8 @@ MapStrStr read_conf (std::istream &cf, char splitter)
     return res;
 }
 
-std::vector<std::pair<int, int>> read_heat_map_conf (std::istream &cf, char splitter)
+
+std::vector<std::pair<int, int>> read_heat_map_conf ( std::istream & cf, char delimiter )
 {
     std::ios::fmtflags flags(cf.flags());
     cf.exceptions(std::ifstream::badbit);
@@ -61,7 +63,7 @@ std::vector<std::pair<int, int>> read_heat_map_conf (std::istream &cf, char spli
         std::string key;
 
         while (getline(cf, line)) {
-            auto target_vector = split_line(line, splitter);
+            auto target_vector = split_line(line, delimiter);
             res.emplace_back(std::stoi(target_vector[0]), std::stoi(target_vector[1]));
         }
 

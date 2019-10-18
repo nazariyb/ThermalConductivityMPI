@@ -8,40 +8,52 @@
 #include <boost/mpi.hpp>
 #include <boost/mpi/communicator.hpp>
 
-//for debug
-#define current_print std::cout << "#" << world.rank()
 
-void save_map ( const ArrayD2 & heat_map, const std::string & img_path )
+void save_map ( const ArrayD2 & heat_map, const std::string & img_path, int max_value_in_map )
 {
     png::image<png::rgb_pixel> image(heat_map.shape()[0], heat_map.shape()[1]);
+
     for ( png::uint_32 y = 0; y < image.get_height(); ++y )
         for ( png::uint_32 x = 0; x < image.get_width(); ++x )
-            image[y][x] = png::rgb_pixel(( heat_map[x][y] / 100. ) * 255, 0, ( 1. - heat_map[x][y] / 100. ) * 255);
+            image[y][x] = png::rgb_pixel(( heat_map[x][y] / max_value_in_map ) * 255,
+                                         0,
+                                         ( 1. - heat_map[x][y] / 100. ) * 255);
+
     image.write(img_path);
+}
+
+
+void send_children_their_parts ( const mpi::communicator & world, int workers_num, const ArrayD2 & heat_map_init_state,
+                                 const VecPairInt & bounds )
+{
+    auto reqs = new mpi::request[workers_num];
+
+    for ( int w = 1; w < workers_num + 1; ++w )
+    {
+        auto new_array = heat_map_init_state[boost::indices
+        [range().start(bounds[w - 1].first).finish(bounds[w - 1].second + 1)]
+        [range()]
+        ];
+
+        reqs[w - 1] = world.isend(w, 1, &new_array[0][0],
+                                  static_cast<int>(new_array.shape()[0] * new_array.shape()[1]));
+    }
+
+    mpi::wait_all(reqs, reqs + workers_num);
+    delete[] reqs;
 }
 
 
 void gather_map ( const mpi::communicator & world, int workers_num, const VecPairInt & bounds, ArrayD2 & array )
 {
-//    std::cout << "start gathering" << std::endl;
     auto reqs = new mpi::request[workers_num];
     for ( int w = 1; w <= workers_num; ++w )
     {
-//        std::cout << "#" << world.rank() << " trying to get res from #" << w << " with size: "
-//                  << ( bounds[w - 1].second - bounds[w - 1].first + 1 ) * array.shape()[1] << std::endl;
+
         reqs[w - 1] = world.irecv(w, 1, &array[bounds[w - 1].first][0],
                                   static_cast<int>(( bounds[w -1 ].second - bounds[w - 1].first + 1 ) * array.shape()[1]));
     }
-//    current_print << " waiting..." << std::endl;
     mpi::wait_all(reqs, reqs + workers_num);
-//    std::cout << "#" << world.rank() << " gathered array, so we have:" << std::endl;
-//    for ( ArrayD2::index i = 0; i < array.shape()[1]; ++i )
-//    {
-//        for ( ArrayD2::index j = 0; j < array.shape()[0]; ++j )
-//            std::cout << array[j][i] << " ";
-//        std::cout << std::endl;
-//    }
-//    std::cout << "========" << std::endl;
     delete[] reqs;
 }
 
@@ -49,26 +61,17 @@ void gather_map ( const mpi::communicator & world, int workers_num, const VecPai
 void swap_edge ( int rank, size_t old_row_ind, size_t new_row_ind, const mpi::communicator & world, ArrayD2 & array )
 {
     mpi::request reqs[2];
-//    current_print << " swapping with #" << rank << std::endl;
     ArrayD1 new_row(boost::extents[array.shape()[1]]);
     reqs[0] = world.irecv(rank, 1, &new_row[0], array.shape()[1]);
 
-//    current_print << " sending " << old_row_ind << " :" << std::endl;
     ArrayD1 old_row = array[boost::indices[old_row_ind][range()]];
-//    for (auto & e : old_row)
-//        std::cout << e << " ";
-//    std::cout << std::endl;
+
     reqs[1] = world.isend(rank, 1, &old_row[0], old_row.shape()[0]);
 
     mpi::wait_all(reqs, reqs + 1);
     array[new_row_ind] = new_row;
 
     mpi::wait_all(reqs + 1, reqs + 2);
-//    current_print << " recived " << old_row.shape()[0] << " :" << std::endl;
-//    for (auto & e : new_row)
-//        std::cout << e << " ";
-//    std::cout << std::endl;
-
 }
 
 
@@ -106,11 +109,6 @@ int generate_heat_map(const VecPairInt & heat_map_conf, ArrayD2 & heat_map_init_
     if (perimeter != expected_perimeter)
         return -1;
 
-    //    конструктор масиву походу заповнює його нулями
-    //    for (ArrayD2::index i = 0; i != heat_map_init_state.shape()[0]; ++i)
-    //        for (ArrayD2::index j = 0; j != heat_map_init_state.shape()[1]; ++j)
-    //            heat_map_init_state[i][j] = 0;
-
     int dirs[4][2] = {{1, 0}, {0, 1}, {-1, 0}, {0, -1}};
     int times_to_insert = heat_map_conf[0].first;
     for(ArrayD2::index row = 0, col = 0, i = 0, j = 0; i < 4;) {
@@ -132,19 +130,11 @@ int generate_heat_map(const VecPairInt & heat_map_conf, ArrayD2 & heat_map_init_
 void next_state(const ArrayD2 & current, ArrayD2 & next, const Params & params)
 {
     for ( int i = 1; i < current.shape()[0] - 1; ++i )
-    {
         for ( int j = 1; j < current.shape()[1] - 1; ++j )
-        {
-//            std::cout << "alpha delta " << params.alpha_deltaT << std::endl;
-//            std::cout << "next state is: " << current[i][j] + params.alpha_deltaT * (
-//                    ( current[i - 1][j] - 2 * current[i][j] + current[i + 1][j] ) / ( params.deltaX * params.deltaX ) +
-//                    ( current[i][j - 1] - 2 * current[i][j] + current[i][j + 1] ) / ( params.deltaY * params.deltaY ) )<< std::endl;
             next[i][j] = current[i][j] + params.alpha_deltaT * (
                     ( current[i - 1][j] - 2 * current[i][j] + current[i + 1][j] ) / ( params.deltaX * params.deltaX ) +
                     ( current[i][j - 1] - 2 * current[i][j] + current[i][j + 1] ) / ( params.deltaY * params.deltaY )
             );
-        }
-    }
 }
 
 
@@ -156,50 +146,16 @@ bool von_Neumann_criterion(const Params & params)
 
 void calculation_process ( const mpi::communicator & world, const ArrayD2 & init_grid, const Params & params )
 {
-    if ( !von_Neumann_criterion(params))
-    {
-        //TODO:
-    }
-
     ArrayD2 current = init_grid[boost::indices[range()][range()]];
     ArrayD2 next = init_grid[boost::indices[range()][range()]];
-//    std::cout << "#" << world.rank() << " started calculating" << std::endl;
+
     for ( int i = 0; i * params.deltaT < params.time; ++i )
     {
-        std::cout << "#" << world.rank() << " iteration: " << i << "/" << i * params.deltaT << std::endl;
-
         if (( static_cast<int>(params.deltaT * i) % params.printT ) == 0 )
-        {
-//            std::cout << "#" << world.rank() << " send results:" << std::endl;
-//            for ( ArrayD2::index i = 0; i < current.shape()[1]; ++i )
-//            {
-//                for ( ArrayD2::index j = 0; j < current.shape()[0]; ++j )
-//                    std::cout << current[j][i] << " ";
-//                std::cout << std::endl;
-//            }
-//            std::cout << "size: " << current.shape()[0] * current.shape()[1] << std::endl;
-//            std::cout << "----" << std::endl;
             world.send(0, 1, &current[0][0], static_cast<int>(current.shape()[0] * current.shape()[1]));
-        }
-//        std::cout << "current: " << std::endl;
-//        for ( ArrayD2::index i = 0; i < current.shape()[1]; ++i )
-//        {
-//            for ( ArrayD2::index j = 0; j < current.shape()[0]; ++j )
-//                std::cout << current[j][i] << " ";
-//            std::cout << std::endl;
-//        }
-//        std::cout << "=======" << std::endl << std::endl;
-        next_state(current, next, params);
-//        std::cout << "next: " << std::endl;
-//        for ( ArrayD2::index i = 0; i < next.shape()[1]; ++i )
-//        {
-//            for ( ArrayD2::index j = 0; j < next.shape()[0]; ++j )
-//                std::cout << next[j][i] << " ";
-//            std::cout << std::endl;
-//        }
-//        std::cout << "----" << std::endl << std::endl;
-        std::swap(current, next);
 
+        next_state(current, next, params);
+        std::swap(current, next);
 
         swap_edges(world, current);
     }

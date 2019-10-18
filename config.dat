@@ -1,10 +1,10 @@
-conductivity = 94000
-capacity = 40000
+conductivity = 1000000
+capacity = 600000
 density = 400
 gridX = 1000
 gridY = 1000
-deltaX = 2
-deltaY = 2
-deltaT = 5
-printT = 100
-time = 10000
+deltaX = 20
+deltaY = 20
+deltaT = 10
+printT = 10000
+time = 100000000

@@ -1,7 +1,7 @@
 #ifndef THERMALCONDUCTIVITYMPI_MAIN_CONFIG_H
 #define THERMALCONDUCTIVITYMPI_MAIN_CONFIG_H
 
-#include "thread_safe_queue.h"
+
 #include "boost/multi_array.hpp"
 #include "boost/mpi.hpp"
 
@@ -10,7 +10,7 @@ using range = boost::multi_array_types::index_range;
 using VecPairInt = std::vector<std::pair<int, int>>;
 using ArrayD1 = boost::multi_array<double, 1>;
 using ArrayD2 = boost::multi_array<double, 2>;
-using ImagesQueue = thread_safe_queue<ArrayD2>;
+
 
 enum Error
     {

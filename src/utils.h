@@ -7,7 +7,10 @@
 #include "boost/multi_array.hpp"
 
 
-void save_map ( const ArrayD2 & heat_map, const std::string & img_path );
+void send_children_their_parts ( const mpi::communicator & world, int workers_num, const ArrayD2 & heat_map_init_state,
+                                 const VecPairInt & bounds );
+
+void save_map ( const ArrayD2 & heat_map, const std::string & img_path, int max_value_in_map );
 
 void gather_map ( const mpi::communicator & world, int workers_num, const VecPairInt & bounds, ArrayD2 & array );
 
@@ -18,6 +21,6 @@ int generate_heat_map ( const VecPairInt & heat_map_conf, ArrayD2 & heat_map_ini
 
 void calculation_process ( const mpi::communicator & world, const ArrayD2 & init_grid, const Params & params );
 //void next_state(const boost::multi_array<double, 2> & current, boost::multi_array<double, 2> & next, const Params & params);
-//bool von_Neumann_criterion(const Params & params);
+bool von_Neumann_criterion ( const Params & params );
 
 #endif //THERMALCONDUCTIVITYMPI_UTILS_H
