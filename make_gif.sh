@@ -1,0 +1,1 @@
+convert -loop 0 -delay 75 ./img_cache/*.png heat_map_sh.gif
